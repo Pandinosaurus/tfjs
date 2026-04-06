@@ -61,10 +61,11 @@ function sparseReshape_(
     inputIndices: Tensor2D|TensorLike, inputShape: Tensor1D|TensorLike,
     newShape: Tensor1D|TensorLike): NamedTensorMap {
   const $inputIndices =
-      convertToTensor(inputIndices, 'inputIndices', 'sparseReshape');
+      convertToTensor(inputIndices, 'inputIndices', 'sparseReshape', 'int32');
   const $inputShape =
-      convertToTensor(inputShape, 'inputShape', 'sparseReshape');
-  const $newShape = convertToTensor(newShape, 'newShape', 'sparseReshape');
+      convertToTensor(inputShape, 'inputShape', 'sparseReshape', 'int32');
+  const $newShape =
+      convertToTensor(newShape, 'newShape', 'sparseReshape', 'int32');
 
   if ($inputIndices.rank !== 2) {
     throw new Error(`Input indices should be Tensor2D but received shape
@@ -88,4 +89,4 @@ function sparseReshape_(
   return {outputIndices: result[0], outputShape: result[1]};
 }
 
-export const sparseReshape = op({sparseReshape_});
+export const sparseReshape = /* @__PURE__ */ op({sparseReshape_});

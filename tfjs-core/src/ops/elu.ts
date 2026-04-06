@@ -37,11 +37,11 @@ import {op} from './operation';
  * @doc {heading: 'Operations', subheading: 'Basic math'}
  */
 function elu_<T extends Tensor>(x: T|TensorLike): T {
-  const $x = convertToTensor(x, 'x', 'elu');
+  const $x = convertToTensor(x, 'x', 'elu', 'float32');
 
   const inputs: EluInputs = {x: $x};
 
-  return ENGINE.runKernel(Elu, inputs as {} as NamedTensorMap);
+  return ENGINE.runKernel(Elu, inputs as unknown as NamedTensorMap);
 }
 
-export const elu = op({elu_});
+export const elu = /* @__PURE__ */ op({elu_});

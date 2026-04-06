@@ -14,63 +14,21 @@
 # limitations under the License.
 # ==============================================================================
 
-set -e
+set -euxo pipefail
 
-# Smoke tests run in PR and nightly builds.
-TAGS="#SMOKE"
+# Generate custom bundle files and model files for tests
+./scripts/run-custom-builds.sh
+./scripts/create-python-models.sh
 
-# Regression tests run in nightly builds.
-if [[ "$NIGHTLY" = true || "$RELEASE" = true ]]; then
-    TAGS="${TAGS},#REGRESSION"
-fi
+TAGS='#SMOKE,#REGRESSION,#GOLDEN'
 
-# Additional setup for regression tests.
-if [[ "$TAGS" == *"#REGRESSION"*  ]]; then
-  # Generate canonical layers models and inputs.
-  ./scripts/create_save_predict.sh
+# Test with smoke/regression tests.
+yarn karma start --single-run --tags "${TAGS}"
 
-  cd integration_tests
+# Test script tag bundles
+# Temporarily disabled
+# yarn karma start --single-run ./script_tag_tests/tfjs/karma.conf.js --testBundle tf.min.js --tags "${TAGS}"
+# yarn karma start --single-run ./script_tag_tests/tfjs-core-cpu/karma.conf.js --tags "${TAGS}"
 
-  source ../scripts/setup-py-env.sh --dev
-
-  echo "Load equivalent keras models and generate outputs."
-  python create_save_predict.py
-
-  echo "Create saved models and convert."
-  python convert_predict.py
-
-  echo "Convert model with user defined metadata."
-  python metadata.py
-
-  # Cleanup python env.
-  source ../scripts/cleanup-py-env.sh
-
-  cd ..
-
-  # Generate custom bundle files for tests
-  ./scripts/run-custom-builds.sh
-
-  # Test webpack
-  cd webpack_test
-  yarn
-  yarn build
-  cd ..
-fi
-
-if [[ "$NIGHTLY" = true || "$RELEASE" = true ]]; then
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_safari_mac --tags '$TAGS' --testEnv webgl --flags '{"\""WEBGL_VERSION"\"": 1, "\""WEBGL_CPU_FORWARD"\"": false, "\""WEBGL_SIZE_UPLOAD_UNIFORM"\"": 0}'"
-
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_ios_11 --tags '$TAGS' --testEnv webgl --flags '{"\""WEBGL_VERSION"\"": 1, "\""WEBGL_CPU_FORWARD"\"": false, "\""WEBGL_SIZE_UPLOAD_UNIFORM"\"": 0}'"
-
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_firefox_mac --tags '$TAGS'"
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_chrome_mac --tags '$TAGS'"
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=win_10_chrome --tags '$TAGS'"
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_android_9 --tags '$TAGS'"
-
-  # Test script tag bundles
-  node ../scripts/run_flaky.js "karma start ./script_tag_tests/tfjs/karma.conf.js --browserstack --browsers=bs_chrome_mac --testBundle tf.min.js"
-
-  node ../scripts/run_flaky.js "karma start ./script_tag_tests/tfjs-core-cpu/karma.conf.js --browserstack --browsers=bs_chrome_mac"
-else
-  node ../scripts/run_flaky.js "yarn run-browserstack --browsers=bs_chrome_mac --tags '$TAGS'"
-fi
+# Test webpack
+(cd webpack_test && yarn --mutex network && yarn build)

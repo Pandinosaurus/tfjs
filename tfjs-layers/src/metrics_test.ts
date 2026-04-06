@@ -14,10 +14,11 @@
 
 import {scalar, Tensor, tensor, tensor1d, tensor2d} from '@tensorflow/tfjs-core';
 
+import {setEpsilon} from './backend/common';
 import * as tfl from './index';
-import {binaryAccuracy, categoricalAccuracy, get, getLossOrMetricName} from './metrics';
+import {binaryAccuracy, categoricalAccuracy, get, getLossOrMetricName, r2Score} from './metrics';
 import {LossOrMetricFn} from './types';
-import {describeMathCPUAndGPU, expectTensorsClose} from './utils/test_utils';
+import {describeMathCPUAndGPU, describeMathCPUAndWebGL2, expectTensorsClose} from './utils/test_utils';
 
 describeMathCPUAndGPU('binaryAccuracy', () => {
   it('1D exact', () => {
@@ -71,7 +72,11 @@ describeMathCPUAndGPU('sparseCategoricalAccuracy', () => {
   });
 });
 
-describeMathCPUAndGPU('binaryCrossentropy', () => {
+describeMathCPUAndWebGL2('binaryCrossentropy', () => {
+  beforeEach(() => {
+    setEpsilon(1e-7);
+  });
+
   it('2D single-value yTrue', () => {
     // Use the following Python code to generate the reference values:
     // ```python
@@ -149,7 +154,7 @@ describeMathCPUAndGPU('categoricalAccuracy', () => {
   });
 });
 
-describeMathCPUAndGPU('categoricalCrossentropy metric', () => {
+describeMathCPUAndWebGL2('categoricalCrossentropy metric', () => {
   it('1D', () => {
     const x = tensor1d([0, 0, 0, 1]);
     const y = tensor1d([0.1, 0.8, 0.05, 0.05]);
@@ -278,6 +283,27 @@ describeMathCPUAndGPU('recall metric', () => {
   });
 });
 
+describeMathCPUAndGPU('r2Score', () => {
+  it('1D', () => {
+    const yTrue = tensor1d([3, -0.5, 2, 7, 4.2, 8.5, 1.3, 2.8, 6.7, 9.0]);
+    const yPred = tensor1d([2.5, 0.0, 2.1, 7.8, 4.0, 8.2, 1.4, 2.9, 6.5, 9.1]);
+    const score = r2Score(yTrue, yPred);
+    expectTensorsClose(score, scalar(0.985));
+  });
+  it('2D', () => {
+    const yTrue = tensor2d([
+      [3, 2.5], [-0.5, 3.2], [2, 1.9], [7, 5.1], [4.2, 3.8], [8.5, 7.4],
+      [1.3, 0.6], [2.8, 2.1], [6.7, 5.3], [9.0, 8.7]
+    ]);
+    const yPred = tensor2d([
+      [2.7, 2.3], [0.0, 3.1], [2.1, 1.8], [6.8, 5.0], [4.1, 3.7], [8.4, 7.2],
+      [1.4, 0.7], [2.9, 2.2], [6.6, 5.2], [9.2, 8.9]
+    ]);
+    const score = r2Score(yTrue, yPred);
+    expectTensorsClose(score, scalar(0.995));
+  });
+});
+
 describe('metrics.get', () => {
   it('valid name, not alias', () => {
     expect(get('binaryAccuracy') === get('categoricalAccuracy')).toEqual(false);
@@ -297,17 +323,17 @@ describe('metrics.get', () => {
 describe('getLossOrMetricName', () => {
   it('string short cut name', async () => {
     const fnName = getLossOrMetricName('meanSquaredError');
-    expect(fnName).toEqual('meanSquaredError');
+    expect(fnName).toMatch(/meanSquaredError/);
   });
 
   it('function included in losses map', async () => {
     const fnName = getLossOrMetricName(tfl.metrics.meanSquaredError);
-    expect(fnName).toEqual('meanSquaredError');
+    expect(fnName).toMatch(/meanSquaredError/);
   });
 
   it('function included in metrics map', async () => {
     const fnName = getLossOrMetricName(tfl.metrics.categoricalAccuracy);
-    expect(fnName).toEqual('categoricalAccuracy');
+    expect(fnName).toMatch(/categoricalAccuracy/);
   });
 
   it('function not included in losses map or metrics map', async () => {

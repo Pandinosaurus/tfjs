@@ -74,13 +74,7 @@ function conv1d_<T extends Tensor2D|Tensor3D>(
       $filter.rank === 3,
       () => `Error in conv1d: filter must be rank 3, but got rank ` +
           `${$filter.rank}.`);
-  if (dimRoundingMode != null) {
-    util.assert(
-        util.isInt(pad as number),
-        () => `Error in conv1d: pad must be an integer when using, ` +
-            `dimRoundingMode ${dimRoundingMode} but got pad ${pad}.`);
-  }
-
+  conv_util.checkPadOnDimRoundingMode('conv1d', pad, dimRoundingMode);
   util.assert(
       x3D.shape[2] === $filter.shape[1],
       () => `Error in conv1d: depth of input (${x3D.shape[2]}) must match ` +
@@ -89,6 +83,12 @@ function conv1d_<T extends Tensor2D|Tensor3D>(
       conv_util.eitherStridesOrDilationsAreOne(stride, dilation),
       () => 'Error in conv1D: Either stride or dilation must be 1. ' +
           `Got stride ${stride} and dilation '${dilation}'`);
+  util.assert(
+      conv_util.stridesOrDilationsArePositive(dilation),
+      () => 'Error in conv1D: Dilated rates should be larger than 0.');
+  util.assert(
+      conv_util.stridesOrDilationsArePositive(stride),
+      () => 'Error in conv1D: Stride should be larger than 0.');
   util.assert(
       dataFormat === 'NWC',
       () => `Error in conv1d: got dataFormat of ${
@@ -113,4 +113,4 @@ function conv1d_<T extends Tensor2D|Tensor3D>(
   return reshape(res, [res.shape[0], res.shape[2], res.shape[3]]) as T;
 }
 
-export const conv1d = op({conv1d_});
+export const conv1d = /* @__PURE__ */ op({conv1d_});

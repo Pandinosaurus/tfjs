@@ -18,14 +18,15 @@
 import * as tf from '../index';
 import {ALL_ENVS, describeWithFlags} from '../jasmine_util';
 import {expectArraysClose} from '../test_util';
+import { identityPoolTest } from './identity_pool_test';
 
 describeWithFlags('maxPool', ALL_ENVS, () => {
   it('x=[1,1,1] f=[1,1] s=1 [0] => [0]', async () => {
-    const x = tf.tensor3d([0], [1, 1, 1]);
+    const x = tf.tensor3d([123], [1, 1, 1]);
 
     const result = tf.maxPool(x, 1, 1, 0);
 
-    expectArraysClose(await result.data(), [0]);
+    expectArraysClose(await result.data(), [123]);
   });
 
   it('x=[3,3,1] f=[2,2] s=1, p=0', async () => {
@@ -111,10 +112,42 @@ describeWithFlags('maxPool', ALL_ENVS, () => {
     expectArraysClose(await result.data(), [4, 4, 4, 4]);
   });
 
+  it('x=[2,2,3] f=[2,2] s=3 p=1 default dimRoundingMode', () => {
+    // Feed forward.
+    const x = tf.tensor3d([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [2, 2, 3]);
+    const result = tf.maxPool(x, 2, 3, 1);
+
+    expect(result.shape).toEqual([1, 1, 3]);
+  });
+
   it('x=[2,2,3] f=[1,1] s=2 p=1 dimRoundingMode=floor', () => {
     // Feed forward.
     const x = tf.tensor3d([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [2, 2, 3]);
     const result = tf.maxPool(x, 1, 2, 1, 'floor');
+
+    expect(result.shape).toEqual([2, 2, 3]);
+  });
+
+  it('x=[2,2,3] f=[2,2] s=3 p=1 dimRoundingMode=floor', () => {
+    // Feed forward.
+    const x = tf.tensor3d([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [2, 2, 3]);
+    const result = tf.maxPool(x, 2, 3, 1, 'floor');
+
+    expect(result.shape).toEqual([1, 1, 3]);
+  });
+
+  it('x=[2,2,3] f=[2,2] s=3 p=1 dimRoundingMode=round', () => {
+    // Feed forward.
+    const x = tf.tensor3d([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [2, 2, 3]);
+    const result = tf.maxPool(x, 2, 3, 1, 'round');
+
+    expect(result.shape).toEqual([2, 2, 3]);
+  });
+
+  it('x=[2,2,3] f=[2,2] s=3 p=1 dimRoundingMode=ceil', () => {
+    // Feed forward.
+    const x = tf.tensor3d([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [2, 2, 3]);
+    const result = tf.maxPool(x, 2, 3, 1, 'ceil');
 
     expect(result.shape).toEqual([2, 2, 3]);
   });
@@ -126,7 +159,16 @@ describeWithFlags('maxPool', ALL_ENVS, () => {
     expect(() => tf.maxPool(x, 2, 1, 0)).toThrowError();
   });
 
-  it('throws when dimRoundingMode is set and pad is not a number', () => {
+  it('throws when dimRoundingMode is set and pad is same', () => {
+    const x = tf.tensor3d([1, 2, 3, 4], [2, 2, 1]);
+
+    const pad = 'same';
+    const dimRoundingMode = 'round';
+
+    expect(() => tf.maxPool(x, 2, 1, pad, dimRoundingMode)).toThrowError();
+  });
+
+  it('throws when dimRoundingMode is set and pad is valid', () => {
     const x = tf.tensor3d([1, 2, 3, 4], [2, 2, 1]);
 
     const pad = 'valid';
@@ -134,6 +176,28 @@ describeWithFlags('maxPool', ALL_ENVS, () => {
 
     expect(() => tf.maxPool(x, 2, 1, pad, dimRoundingMode)).toThrowError();
   });
+
+  it('throws when dimRoundingMode is set and pad is a non-integer number',
+     () => {
+       const x = tf.tensor3d([1, 2, 3, 4], [2, 2, 1]);
+
+       const pad = 1.2;
+       const dimRoundingMode = 'round';
+
+       expect(() => tf.maxPool(x, 2, 1, pad, dimRoundingMode)).toThrowError();
+     });
+
+  it('throws when dimRoundingMode is set and pad is explicit by non-integer ' +
+         'number',
+     () => {
+       const x = tf.tensor3d([1, 2, 3, 4], [2, 2, 1]);
+
+       const pad = [[0, 0], [0, 2.1], [1, 1], [0, 0]] as
+           tf.backend_util.ExplicitPadding;
+       const dimRoundingMode = 'round';
+
+       expect(() => tf.maxPool(x, 2, 1, pad, dimRoundingMode)).toThrowError();
+     });
 
   it('throws when passed a non-tensor', () => {
     expect(() => tf.maxPool({} as tf.Tensor3D, 2, 1, 'valid'))
@@ -145,6 +209,8 @@ describeWithFlags('maxPool', ALL_ENVS, () => {
     const result = tf.maxPool(x, 1, 1, 0);
     expectArraysClose(await result.data(), [0]);
   });
+
+  identityPoolTest(tf.maxPool);
 });
 
 describeWithFlags('maxPoolBackprop', ALL_ENVS, () => {

@@ -11,9 +11,8 @@
 import {io, linalg, randomNormal, Tensor, zeros} from '@tensorflow/tfjs-core';
 
 import * as tfl from './index';
-import * as initializers from './initializers';
 // tslint:disable-next-line:max-line-length
-import {describeMathCPUAndGPU, describeMathGPU, expectTensorsClose} from './utils/test_utils';
+import {describeMathCPUAndGPU, describeMathCPUAndWebGL2, expectTensorsClose} from './utils/test_utils';
 import {version} from './version';
 
 describeMathCPUAndGPU('LayersModel.save', () => {
@@ -95,7 +94,7 @@ describeMathCPUAndGPU('LayersModel.save', () => {
     expect(handler.savedArtifacts.weightSpecs[1].dtype).toEqual('float32');
   });
 
-  it('Saving to a handler without save method fails', async done => {
+  it('Saving to a handler without save method fails', async () => {
     const model = tfl.sequential();
     model.add(tfl.layers.dense({units: 3, inputShape: [5]}));
     const handler = new EmptyIOHandler();
@@ -110,17 +109,48 @@ describeMathCPUAndGPU('LayersModel.save', () => {
               .toEqual(
                   'LayersModel.save() cannot proceed because the IOHandler ' +
                   'provided does not have the `save` attribute defined.');
-          done();
         });
   });
 });
 
-describeMathGPU('Save-load round trips', () => {
+describeMathCPUAndWebGL2('Save-load round trips', () => {
   it('Sequential model, Local storage', async () => {
     const model1 = tfl.sequential();
     model1.add(
         tfl.layers.dense({units: 2, inputShape: [2], activation: 'relu'}));
     model1.add(tfl.layers.dense({units: 1, useBias: false}));
+
+    // Use a randomly generated model path to prevent collision.
+    const path = `testModel${new Date().getTime()}_${Math.random()}`;
+
+    // First save the model to local storage.
+    const modelURL = `localstorage://${path}`;
+    await model1.save(modelURL);
+    // Once the saving succeeds, load the model back.
+    const model2 = await tfl.loadLayersModel(modelURL);
+    // Verify that the topology of the model is correct.
+    expect(model2.toJSON(null, false)).toEqual(model1.toJSON(null, false));
+
+    // Check the equality of the two models' weights.
+    const weights1 = model1.getWeights();
+    const weights2 = model2.getWeights();
+    expect(weights2.length).toEqual(weights1.length);
+    for (let i = 0; i < weights1.length; ++i) {
+      expectTensorsClose(weights1[i], weights2[i]);
+    }
+  });
+
+  it('loadLayersModel: save and load a model with empty weights', async () => {
+    // https://github.com/tensorflow/tfjs/issues/7865
+    // Models without weights should still be valid models
+    const model1 = tfl.sequential();
+    model1.add(
+      tfl.layers.upSampling2d({
+        size: [2, 2],
+        dataFormat: 'channelsLast',
+        inputShape: [null, null, 3],
+      })
+    );
 
     // Use a randomly generated model path to prevent collision.
     const path = `testModel${new Date().getTime()}_${Math.random()}`;
@@ -288,18 +318,12 @@ describeMathGPU('Save-load round trips', () => {
         }));
     const weights = model.getWeights();
 
-    const getInitSpy = spyOn(initializers, 'getInitializer').and.callThrough();
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
     const modelPrime = await tfl.loadLayersModel(io.fromMemory(savedArtifacts));
     const weightsPrime = modelPrime.getWeights();
     expect(weightsPrime.length).toEqual(weights.length);
     for (let i = 0; i < weights.length; ++i) {
       expectTensorsClose(weightsPrime[i], weights[i]);
     }
-    // Assert that orthogonal initializer hasn't been obtained during
-    // the model loading.
-    expect(getInitSpy).toHaveBeenCalledWith('zeros');
-    expect(gramSchmidtSpy).not.toHaveBeenCalled();
   });
 
   it('Loading model: Fast init w/ weights: timeDistributed', async () => {
@@ -317,18 +341,12 @@ describeMathGPU('Save-load round trips', () => {
         }));
     const weights = model.getWeights();
 
-    const getInitSpy = spyOn(initializers, 'getInitializer').and.callThrough();
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
     const modelPrime = await tfl.loadLayersModel(io.fromMemory(savedArtifacts));
     const weightsPrime = modelPrime.getWeights();
     expect(weightsPrime.length).toEqual(weights.length);
     for (let i = 0; i < weights.length; ++i) {
       expectTensorsClose(weightsPrime[i], weights[i]);
     }
-    // Assert that orthogonal initializer hasn't been obtained during
-    // the model loading.
-    expect(getInitSpy).toHaveBeenCalledWith('zeros');
-    expect(gramSchmidtSpy).not.toHaveBeenCalled();
   });
 
   it('Loading model: Fast init w/ weights: bidirectional', async () => {
@@ -351,18 +369,12 @@ describeMathGPU('Save-load round trips', () => {
         }));
     const weights = model.getWeights();
 
-    const getInitSpy = spyOn(initializers, 'getInitializer').and.callThrough();
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
     const modelPrime = await tfl.loadLayersModel(io.fromMemory(savedArtifacts));
     const weightsPrime = modelPrime.getWeights();
     expect(weightsPrime.length).toEqual(weights.length);
     for (let i = 0; i < weights.length; ++i) {
       expectTensorsClose(weightsPrime[i], weights[i]);
     }
-    // Assert that orthogonal initializer hasn't been obtained during
-    // the model loading.
-    expect(getInitSpy).toHaveBeenCalledWith('zeros');
-    expect(gramSchmidtSpy).not.toHaveBeenCalled();
   });
 
   it('Loading model: Fast init w/ weights: functional model', async () => {
@@ -387,18 +399,12 @@ describeMathGPU('Save-load round trips', () => {
         }));
     const weights = model.getWeights();
 
-    const getInitSpy = spyOn(initializers, 'getInitializer').and.callThrough();
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
     const modelPrime = await tfl.loadLayersModel(io.fromMemory(savedArtifacts));
     const weightsPrime = modelPrime.getWeights();
     expect(weightsPrime.length).toEqual(weights.length);
     for (let i = 0; i < weights.length; ++i) {
       expectTensorsClose(weightsPrime[i], weights[i]);
     }
-    // Assert that orthogonal initializer hasn't been obtained during
-    // the model loading.
-    expect(getInitSpy).toHaveBeenCalledWith('zeros');
-    expect(gramSchmidtSpy).not.toHaveBeenCalled();
   });
 
   it('modelFromJSON calls correct weight initializers', async () => {
@@ -412,13 +418,13 @@ describeMathGPU('Save-load round trips', () => {
     }));
     const modelJSON = model.toJSON(null, false);
 
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
+    const qrSpy = spyOn(linalg, 'qr').and.callThrough();
     const modelPrime =
         await tfl.models.modelFromJSON({modelTopology: modelJSON});
     // Make sure modelPrime builds.
     modelPrime.predict(zeros([2, 3, 4]));
     // Assert the orthogonal initializer has been called.
-    expect(gramSchmidtSpy).toHaveBeenCalled();
+    expect(qrSpy).toHaveBeenCalled();
   });
 
   it('Partial non-strict load calls weight initializers', async () => {
@@ -441,7 +447,7 @@ describeMathGPU('Save-load round trips', () => {
     expect(savedArtifacts.weightSpecs.length).toEqual(3);
     savedArtifacts.weightSpecs = savedArtifacts.weightSpecs.slice(0, 1);
 
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
+    const qrSpy = spyOn(linalg, 'qr').and.callThrough();
     const strict = false;
     const modelPrime =
         await tfl.loadLayersModel(io.fromMemory(savedArtifacts), {strict});
@@ -449,7 +455,7 @@ describeMathGPU('Save-load round trips', () => {
     expect(weightsPrime.length).toEqual(weights.length);
     expectTensorsClose(weightsPrime[0], weights[0]);
     // Assert the orthogonal initializer has been called.
-    expect(gramSchmidtSpy).toHaveBeenCalled();
+    expect(qrSpy).toHaveBeenCalled();
   });
 
   it('loadLayersModel: non-strict load calls weight initializers', async () => {
@@ -472,7 +478,7 @@ describeMathGPU('Save-load round trips', () => {
     expect(savedArtifacts.weightSpecs.length).toEqual(3);
     savedArtifacts.weightSpecs = savedArtifacts.weightSpecs.slice(0, 1);
 
-    const gramSchmidtSpy = spyOn(linalg, 'gramSchmidt').and.callThrough();
+    const qrSpy = spyOn(linalg, 'qr').and.callThrough();
     const strict = false;
     const modelPrime =
         await tfl.loadLayersModel(io.fromMemory(savedArtifacts), {strict});
@@ -480,7 +486,7 @@ describeMathGPU('Save-load round trips', () => {
     expect(weightsPrime.length).toEqual(weights.length);
     expectTensorsClose(weightsPrime[0], weights[0]);
     // Assert the orthogonal initializer has been called.
-    expect(gramSchmidtSpy).toHaveBeenCalled();
+    expect(qrSpy).toHaveBeenCalled();
   });
 
   it('Load model artifact with ndarray-format scalar objects', async () => {

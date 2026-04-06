@@ -27,7 +27,7 @@ export const depthwiseConv2dNativeGradConfig: GradConfig = {
   inputsToSave: ['x', 'filter'],
   gradFunc: (dy: Tensor4D, saved: Tensor[], attrs: NamedAttrMap) => {
     const {dilations, strides, pad, dimRoundingMode} =
-        attrs as {} as DepthwiseConv2dNativeAttrs;
+        attrs as unknown as DepthwiseConv2dNativeAttrs;
     const $dilations = dilations == null ? [1, 1] as[number,number] : dilations;
 
     util.assert(
@@ -58,13 +58,8 @@ export const depthwiseConv2dNativeGradConfig: GradConfig = {
             `dilations must be  1. Got strides ${strides} and dilations ` +
             `'${$dilations}'.`);
 
-    if (dimRoundingMode != null) {
-      util.assert(
-          util.isInt(pad as number),
-          () =>
-              `Error in depthwiseConv2d: pad must be an integer when using, ` +
-              `dimRoundingMode ${dimRoundingMode} but got pad ${pad}.`);
-    }
+    conv_util.checkPadOnDimRoundingMode(
+        'depthwiseConv2d', pad, dimRoundingMode);
 
     return {
       x: () => depthwiseConv2dNativeBackpropInput(

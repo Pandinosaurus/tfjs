@@ -149,6 +149,18 @@ const SIMPLE_MODEL: tensorflow.IGraphDef = {
       input: ['BiasAdd'],
       attr: {DstT: {type: tensorflow.DataType.DT_UINT8}}
     },
+    {
+      name: 'Cast3',
+      op: 'Cast',
+      input: ['BiasAdd'],
+      attr: {DstT: {type: tensorflow.DataType.DT_HALF}}
+    },
+    {
+      name: 'Cast4',
+      op: 'Cast',
+      input: ['BiasAdd'],
+      attr: {DstT: {type: tensorflow.DataType.DT_COMPLEX64}}
+    }
   ],
   library: {
     function: [
@@ -268,7 +280,10 @@ describe('completeness check', () => {
         };
         convertedGraph = mapper.transformGraph(graph);
         expect(Object.keys(convertedGraph.nodes)).toEqual([tfOp.tfOpName]);
-        expect(convertedGraph.nodes[tfOp.tfOpName].op).toEqual(tfOp.tfOpName);
+        const node = convertedGraph.nodes[tfOp.tfOpName];
+        expect(node.op).toEqual(tfOp.tfOpName);
+        expect(node.category).withContext(`Op: ${node.op}, category`)
+          .toEqual(tfOp.category);
       });
     });
   });
@@ -301,7 +316,7 @@ describe('operationMapper without signature', () => {
       it('should find the graph output nodes', () => {
         expect(convertedGraph.outputs.map(node => node.name)).toEqual([
           'Fill', 'Squeeze', 'Squeeze2', 'Split', 'LogicalNot',
-          'FusedBatchNorm', 'Cast2'
+          'FusedBatchNorm', 'Cast2', 'Cast3', 'Cast4'
         ]);
       });
 
@@ -315,7 +330,7 @@ describe('operationMapper without signature', () => {
         expect(Object.keys(convertedGraph.nodes)).toEqual([
           'image_placeholder', 'Const', 'Shape', 'Value', 'Fill', 'Conv2D',
           'BiasAdd', 'Cast', 'Squeeze', 'Squeeze2', 'Split', 'LogicalNot',
-          'FusedBatchNorm', 'Cast2'
+          'FusedBatchNorm', 'Cast2', 'Cast3', 'Cast4'
         ]);
       });
     });
@@ -438,6 +453,10 @@ describe('operationMapper without signature', () => {
         expect(convertedGraph.nodes['Cast'].attrParams['dtype'].value)
             .toEqual('int32');
       });
+      it('should map params with complex64 dtype', () => {
+        expect(convertedGraph.nodes['Cast4'].attrParams['dtype'].value)
+            .toEqual('complex64');
+      });
     });
   });
 });
@@ -477,7 +496,7 @@ describe('operationMapper with signature', () => {
         expect(Object.keys(convertedGraph.nodes)).toEqual([
           'image_placeholder', 'Const', 'Shape', 'Value', 'Fill', 'Conv2D',
           'BiasAdd', 'Cast', 'Squeeze', 'Squeeze2', 'Split', 'LogicalNot',
-          'FusedBatchNorm', 'Cast2'
+          'FusedBatchNorm', 'Cast2', 'Cast3', 'Cast4'
         ]);
       });
     });
@@ -538,6 +557,14 @@ describe('operationMapper with signature', () => {
       it('should map params with uint8 dtype', () => {
         expect(convertedGraph.nodes['Cast2'].attrParams['dtype'].value)
             .toEqual('int32');
+      });
+      it('should map params with half dtype', () => {
+        expect(convertedGraph.nodes['Cast3'].attrParams['dtype'].value)
+            .toEqual('float32');
+      });
+      it('should map params with complex64 dtype', () => {
+        expect(convertedGraph.nodes['Cast4'].attrParams['dtype'].value)
+            .toEqual('complex64');
       });
     });
   });

@@ -18,9 +18,9 @@
 import {backend_util, buffer, GatherV2, GatherV2Attrs, GatherV2Inputs, KernelConfig, KernelFunc, Rank, TensorBuffer, TensorInfo, TypedArray, util} from '@tensorflow/tfjs-core';
 
 import {WebGPUBackend} from '../backend_webgpu';
+import {GatherProgram} from '../gather_webgpu';
 import {gatherV2ImplCPU} from '../kernel_utils/shared';
 
-import {GatherProgram} from './gather_webgpu';
 import {reshape} from './Reshape';
 
 export function gatherV2(
@@ -31,17 +31,9 @@ export function gatherV2(
   const {x, indices} = inputs;
   const {axis, batchDims} = attrs;
 
-  // Throw error when any index is out of bound.
+  // Unlike WebGL, WebGPU won't check if index is out of bound by calling
+  // backend.readSync() function in debug mode.
   const parsedAxis = util.parseAxisParam(axis, x.shape)[0];
-  const indicesVals = backend.readSync(indices.dataId) as TypedArray;
-  const axisDim = x.shape[parsedAxis];
-  for (let i = 0; i < indicesVals.length; ++i) {
-    const index = indicesVals[i];
-    util.assert(
-        index <= axisDim - 1 && index >= 0,
-        () =>
-            `GatherV2: the index value ${index} is not in [0, ${axisDim - 1}]`);
-  }
 
   const shapeInfo = backend_util.segment_util.collectGatherOpShapeInfo(
       x, indices, parsedAxis, batchDims);
@@ -76,16 +68,16 @@ export function gatherV2(
   ];
 
   if (backend.shouldExecuteOnCPU([x, indices])) {
-    const indicesBufferInfo = backend.tensorMap.get(flattenIndex.dataId);
-    const indicesValues = indicesBufferInfo.values as TypedArray;
-    const indicesBuf =
+    const indicesTensorData = backend.tensorMap.get(flattenIndex.dataId);
+    const indicesValues = indicesTensorData.values as TypedArray;
+    const indicesBuffer =
         buffer(flattenIndex.shape, flattenIndex.dtype, indicesValues) as
         TensorBuffer<Rank>;
-    const xBufferInfo = backend.tensorMap.get(flattenX.dataId);
-    const xValues = xBufferInfo.values as TypedArray;
-    const xBuf =
+    const flattenXTensorData = backend.tensorMap.get(flattenX.dataId);
+    const xValues = flattenXTensorData.values as TypedArray;
+    const xBuffer =
         buffer(flattenX.shape, flattenX.dtype, xValues) as TensorBuffer<Rank>;
-    const outBuf = gatherV2ImplCPU(xBuf, indicesBuf, flattenOutputShape);
+    const outBuf = gatherV2ImplCPU(xBuffer, indicesBuffer, flattenOutputShape);
 
     toDispose.forEach(t => backend.disposeData(t.dataId));
 
@@ -107,5 +99,5 @@ export function gatherV2(
 export const gatherV2Config: KernelConfig = {
   kernelName: GatherV2,
   backendName: 'webgpu',
-  kernelFunc: gatherV2 as {} as KernelFunc
+  kernelFunc: gatherV2 as unknown as KernelFunc
 };

@@ -163,23 +163,22 @@ and <a href="https://js.tensorflow.org/api/latest/">documentation</a> for more d
 ## Importing pre-trained models
 
 We support porting pre-trained models from:
-- [TensorFlow SavedModel](https://github.com/tensorflow/tfjs-converter)
+- [TensorFlow SavedModel](https://www.tensorflow.org/js/tutorials/conversion/import_saved_model)
 - [Keras](https://js.tensorflow.org/tutorials/import-keras.html)
 
 ## Various ops supported in different backends
 
 Please refer below :
-- [TFJS Ops Metrix](https://docs.google.com/spreadsheets/d/1D25XtWaBrmUEErbGQB0QmNhH-xtwHo9LDl59w0TbxrI/edit#gid=0)
+- [TFJS Ops Matrix](https://docs.google.com/spreadsheets/d/1D25XtWaBrmUEErbGQB0QmNhH-xtwHo9LDl59w0TbxrI/edit#gid=0)
 
 ## Find out more
 
 [TensorFlow.js](https://js.tensorflow.org) is a part of the
 [TensorFlow](https://www.tensorflow.org) ecosystem. For more info:
-- For help from the community, use [`tensorflow.js`](https://stackoverflow.com/questions/tagged/tensorflow.js) tag on Stack Overflow.
-- [js.tensorflow.org](https://js.tensorflow.org)
+- For help from the community, use the `tfjs` tag on the [TensorFlow Forum](https://discuss.tensorflow.org/tag/tfjs).
+- [TensorFlow.js Website](https://js.tensorflow.org)
 - [Tutorials](https://js.tensorflow.org/tutorials)
 - [API reference](https://js.tensorflow.org/api/latest/)
-- [Discussion mailing list](https://groups.google.com/a/tensorflow.org/forum/#!forum/tfjs)
 - [TensorFlow.js Blog](https://blog.tensorflow.org/search?label=TensorFlow.js)
 
 Thanks, <a href="https://www.browserstack.com/">BrowserStack</a>, for providing testing support.

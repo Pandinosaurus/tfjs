@@ -15,14 +15,61 @@
 
 load("@npm//@bazel/concatjs:index.bzl", "karma_web_test")
 
+PEER_DEPS = [
+    "@npm//karma",
+    "@npm//karma-jasmine",
+    "@npm//karma-requirejs",
+    "@npm//karma-sourcemap-loader",
+    "@npm//requirejs",
+    "@npm//@bazel/concatjs",
+    # The above dependencies are the default when 'peer_deps' is not
+    # specified. They are manually spefied here so we can append
+    # extra dependencies.
+    "@npm//karma-jasmine-html-reporter",
+    "@npm//karma-jasmine-order-reporter",
+]
+
+# @//:grep flag greps for a set of tests to run
+GrepProvider = provider(fields = ["grep"])
+
+def _grep_flag_impl(ctx):
+    return GrepProvider(grep = ctx.build_setting_value)
+
+grep_flag = rule(
+    implementation = _grep_flag_impl,
+    build_setting = config.string(flag = True),
+)
+
+# @//:headless flag runs tests headlessly. Defaults to true.
+HeadlessProvider = provider(fields = ["headless"])
+
+def _headless_flag_impl(ctx):
+    return HeadlessProvider(headless = ctx.build_setting_value)
+
+headless_flag = rule(
+    implementation = _headless_flag_impl,
+    build_setting = config.bool(flag = True),
+)
+
 def _make_karma_config_impl(ctx):
+    grep = ctx.attr._grep[GrepProvider].grep
+    headless = ctx.attr.headless[HeadlessProvider].headless
     output_file_path = ctx.label.name + ".js"
     output_file = ctx.actions.declare_file(output_file_path)
+    args = ctx.attr.args
+    if grep:
+        args = args + ["--grep=" + grep]
+
+    seed = ctx.attr.seed
     ctx.actions.expand_template(
         template = ctx.file.template,
         output = ctx.outputs.config_file,
         substitutions = {
+            "TEMPLATE_args": str(args),
             "TEMPLATE_browser": ctx.attr.browser,
+            "TEMPLATE_headless": "true" if headless else "false",
+            "TEMPLATE_jasmine_random": "false" if seed else "true",
+            "TEMPLATE_jasmine_seed": seed if seed else "undefined",
         },
     )
     return [DefaultInfo(files = depset([output_file]))]
@@ -30,27 +77,55 @@ def _make_karma_config_impl(ctx):
 _make_karma_config = rule(
     implementation = _make_karma_config_impl,
     attrs = {
+        "args": attr.string_list(
+            # TODO(mattsoulanille): Make this a dict instead of a list
+            doc = """Args to pass through to the client.
+
+            They appear in '__karma__.config.args'.
+            """,
+        ),
         "browser": attr.string(
-            mandatory = True,
+            default = "",
             doc = "The browser to run",
+        ),
+        "headless": attr.label(
+            default = "@//:headless",
+            doc = """Whether to run chrome tests headlessly.
+
+            Defaults to true on most platforms. Note that not all browsers
+            support headless mode. Check //tools/karma_template.conf.js for
+            more details.
+            """,
+        ),
+        "seed": attr.string(
+            default = "",
+            doc = """Use this seed for test order.
+
+            If not specified or empty, use a random seed every time.
+            """,
         ),
         "template": attr.label(
             default = Label("@//tools:karma_template.conf.js"),
             allow_single_file = True,
             doc = "The karma config template to expand",
         ),
+        "_grep": attr.label(default = "@//:grep"),
     },
     outputs = {"config_file": "%{name}.js"},
 )
 
-def tfjs_web_test(name, ci = True, **kwargs):
+def tfjs_web_test(name, ci = True, args = [], **kwargs):
     tags = kwargs.pop("tags", [])
+    local_browser = kwargs.pop("local_browser", "")
+    seed = kwargs.pop("seed", "")
+    headless = kwargs.pop("headless", True)
+
     browsers = kwargs.pop("browsers", [
         "bs_chrome_mac",
         "bs_firefox_mac",
         "bs_safari_mac",
-        "bs_ios_11",
-        "bs_android_9",
+        "bs_ios_12",
+        "bs_android_10",
         "win_10_chrome",
     ])
 
@@ -65,14 +140,22 @@ def tfjs_web_test(name, ci = True, **kwargs):
     timeout = kwargs.pop("timeout", "long")
 
     # For local testing
-    # NOTE: If karma_template.conf.js is changed such that it affects the tests
-    # outside of choosing which browsers they run on, it may need to be added
-    # here.
+    config_file = "{}_config".format(name)
+    _make_karma_config(
+        name = config_file,
+        args = args,
+        browser = local_browser,
+        seed = seed,
+    )
+
     karma_web_test(
         size = size,
         timeout = timeout,
         name = name,
-        tags = ["native"] + tags,
+        config_file = config_file,
+        configuration_env_vars = [] if headless else ["DISPLAY"],
+        peer_deps = PEER_DEPS,
+        tags = ["native", "no-remote-exec"] + tags,
         **kwargs
     )
 
@@ -82,9 +165,11 @@ def tfjs_web_test(name, ci = True, **kwargs):
         _make_karma_config(
             name = config_file,
             browser = browser,
+            args = args,
+            seed = seed,
         )
 
-        additional_tags = []
+        additional_tags = ["no-remote-exec"]
         if ci:
             # Tag to be run in nightly.
             additional_tags.append("nightly")
@@ -95,19 +180,9 @@ def tfjs_web_test(name, ci = True, **kwargs):
         karma_web_test(
             size = size,
             timeout = timeout,
-            name = "browserstack_{}_{}".format(browser, name),
+            name = "{}_{}".format(browser, name),
             config_file = config_file,
-            peer_deps = [
-                "@npm//karma",
-                "@npm//karma-jasmine",
-                "@npm//karma-requirejs",
-                "@npm//karma-sourcemap-loader",
-                "@npm//requirejs",
-                # The above dependencies are the default when 'peer_deps' is not
-                # specified. They are manually spefied here so we can append
-                # karma-browserstack-launcher.
-                "@npm//karma-browserstack-launcher",
-            ],
+            peer_deps = PEER_DEPS + ["@npm//karma-browserstack-launcher"],
             tags = tags + additional_tags,
             **kwargs
         )
